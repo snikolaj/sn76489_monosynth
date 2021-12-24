@@ -1,0 +1,146 @@
+// MD_SN74689 Library example program.
+//
+// Plays MIDI notes 0-127 in sequence over and over again.
+// Tests tone/note playing functions of the library using timed notes
+// or time managed by the application.
+//
+// Library Dependencies
+// MusicTable library located at https://github.com/MajicDesigns/MD_MusicTable
+//
+
+#include <MD_SN76489.h>
+#include "MD_MusicTable.h"
+
+#define ROW1 13
+#define ROW2 12
+#define ROW3 11
+#define ROW4 10
+
+#define COL1 9
+#define COL2 A4
+#define COL3 A5
+
+
+const uint8_t D_PIN[] = { A0, A1, A2, A3, 4, 5, 6, 7 };
+
+const uint8_t WE_PIN = 8;     // Arduino pin connected to the IC WE pin
+const uint8_t TEST_CHAN = 1;  // Channel being exercised in
+
+MD_SN76489_Direct S(D_PIN, WE_PIN, true);
+
+MD_MusicTable T;
+
+uint16_t keysPressed = 0;
+uint16_t lastPressed = 0;
+uint16_t keysChanged;
+
+
+// Code -------------------------------
+void setup(void)
+{
+  Serial.begin(57600);
+  Serial.println(F("[MD_SN76489 Note Tester]"));
+  #define CLOCK_PIN 3  // Pin 3 will be the 4MHz signal.
+  pinMode(CLOCK_PIN, OUTPUT);
+
+  TCCR2A = _BV(COM2B1) | _BV(WGM21) | _BV(WGM20);
+  TCCR2B = _BV(WGM22) | _BV(CS20);     
+  OCR2A = 3;
+  OCR2B = 1;
+
+  pinMode(ROW1, OUTPUT);
+  pinMode(ROW2, OUTPUT);
+  pinMode(ROW3, OUTPUT);
+  pinMode(ROW4, OUTPUT);
+
+  pinMode(COL1, INPUT_PULLUP);
+  pinMode(COL2, INPUT_PULLUP);
+  pinMode(COL3, INPUT_PULLUP);
+
+  S.begin();
+}
+
+void loop(void)
+{
+  
+  S.play(); // run the sound machine every time through loop()
+
+  if(millis() % 100 == 0){
+    scanKeys();
+    delay(1);
+  }
+  
+  
+ 
+}
+
+//uint16_t f = (uint16_t)(T.getFrequency() + 0.5);  // round it up
+// S.note(TEST_CHAN, f, MD_SN76489::VOL_MAX, PLAY_TIME);
+void scanKeys(){
+  keysPressed = 0;
+  
+  digitalWrite(ROW1, LOW);
+  digitalWrite(ROW2, HIGH);
+  digitalWrite(ROW3, HIGH);
+  digitalWrite(ROW4, HIGH);
+  keysPressed = keysPressed | (digitalRead(COL1) << 11);
+  keysPressed = keysPressed | (digitalRead(COL2) << 10);
+  keysPressed = keysPressed | (digitalRead(COL3) << 9);
+
+  digitalWrite(ROW1, HIGH);
+  digitalWrite(ROW2, LOW);
+  digitalWrite(ROW3, HIGH);
+  digitalWrite(ROW4, HIGH);
+  keysPressed = keysPressed | (digitalRead(COL1) << 8);
+  keysPressed = keysPressed | (digitalRead(COL2) << 7);
+  keysPressed = keysPressed | (digitalRead(COL3) << 6);
+
+  digitalWrite(ROW1, HIGH);
+  digitalWrite(ROW2, HIGH);
+  digitalWrite(ROW3, LOW);
+  digitalWrite(ROW4, HIGH);
+  keysPressed = keysPressed | (digitalRead(COL1) << 5);
+  keysPressed = keysPressed | (digitalRead(COL2) << 4);
+  keysPressed = keysPressed | (digitalRead(COL3) << 3);
+
+  digitalWrite(ROW1, HIGH);
+  digitalWrite(ROW2, HIGH);
+  digitalWrite(ROW3, HIGH);
+  digitalWrite(ROW4, LOW);
+  keysPressed = keysPressed | (digitalRead(COL1) << 2);
+  keysPressed = keysPressed | (digitalRead(COL2) << 1);
+  keysPressed = keysPressed | digitalRead(COL3);
+
+  keysChanged = keysPressed ^ lastPressed;
+  noteHandler();
+
+
+  lastPressed = keysPressed;
+  
+  
+  
+  Serial.println(keysPressed, BIN);
+}
+
+void noteHandler(){
+  uint16_t posTrans = keysChanged & (~keysPressed);
+  uint16_t negTrans = keysChanged & (~lastPressed);
+  uint8_t noteIndex = 72;
+  for(uint16_t i = 1; i != (1 << 13); i <<= 1){
+    if(i & posTrans){
+      T.findId(noteIndex);
+      uint16_t f = (uint16_t)(T.getFrequency() + 0.5);  // round it up
+      S.note(TEST_CHAN, f, MD_SN76489::VOL_MAX);
+    }
+
+    noteIndex--;
+  }
+  
+  if(negTrans != 0){
+    S.note(TEST_CHAN, 0, MD_SN76489::VOL_MAX);
+  }
+
+  
+  Serial.println(posTrans, BIN);
+  Serial.println(negTrans, BIN);  
+}
